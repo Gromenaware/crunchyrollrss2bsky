@@ -1,0 +1,24 @@
+name: Post RSS to Bluesky
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '*/30 * * * *'  # every 30 minutes
+
+jobs:
+  post:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install dependencies
+        run: |
+          pip install atproto fastfeedparser beautifulsoup4 httpx arrow
+      - name: Copy config
+        run: |
+          echo '${{ secrets.RSS2BSKY_CONFIG }}' > config.json
+      - name: Run script
+        run: python rss2bsky.py
