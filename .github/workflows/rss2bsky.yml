@@ -17,8 +17,9 @@ jobs:
       - name: Install dependencies
         run: |
           pip install atproto fastfeedparser beautifulsoup4 httpx arrow
-      - name: Copy config
-        run: |
-          echo '${{ secrets.RSS2BSKY_CONFIG }}' > config.json
       - name: Run script
-        run: python rss2bsky.py
+        run: |
+          python3 rss2bsky.py https://www.rac1.cat/rss/home.xml \
+            "${{ secrets.BLSKY_HANDLE }}" \
+            "${{ secrets.BLSKY_USERNAME }}" \
+            "${{ secrets.BLSKY_APP_PASSWORD }}"

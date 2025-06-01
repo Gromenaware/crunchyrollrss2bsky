@@ -1,20 +1,17 @@
+import argparse
 import arrow
 import fastfeedparser
-import json
-import os
 import logging
 import re
 import httpx
+import time
 
 from atproto import Client, client_utils, models
 from bs4 import BeautifulSoup
 from urllib.parse import urlparse
 
-# --- Config ---
-CONFIG_PATH = os.environ.get("RSS2BSKY_CONFIG", "config.json")
-LOG_PATH = os.environ.get("RSS2BSKY_LOG", "rss2bsky.log")
-
 # --- Logging ---
+LOG_PATH = "rss2bsky.log"
 logging.basicConfig(
     format="%(asctime)s %(message)s",
     filename=LOG_PATH,
@@ -83,31 +80,36 @@ def get_image_from_url(image_url, client):
         return None
 
 def main():
-    # --- Load config ---
-    with open(CONFIG_PATH, "r") as f:
-        config = json.load(f)
+    # --- Parse command-line arguments ---
+    parser = argparse.ArgumentParser(description="Post RSS to Bluesky.")
+    parser.add_argument("rss_feed", help="RSS feed URL")
+    parser.add_argument("bsky_handle", help="Bluesky handle")
+    parser.add_argument("bsky_username", help="Bluesky username")
+    parser.add_argument("bsky_app_password", help="Bluesky app password")
+    args = parser.parse_args()
 
-    offline = config.get("bsky", {}).get("handle") == "offline"
+    feed_url = args.rss_feed
+    bsky_handle = args.bsky_handle
+    bsky_username = args.bsky_username
+    bsky_password = args.bsky_app_password
 
     # --- Login ---
     client = Client()
-    if not offline:
-        import time
-        backoff = 60
-        while True:
-            try:
-                client.login(config["bsky"]["username"], config["bsky"]["password"])
-                break
-            except Exception as e:
-                logging.exception("Login exception")
-                time.sleep(backoff)
-                backoff = min(backoff + 60, 600)
+    backoff = 60
+    while True:
+        try:
+            client.login(bsky_username, bsky_password)
+            break
+        except Exception as e:
+            logging.exception("Login exception")
+            time.sleep(backoff)
+            backoff = min(backoff + 60, 600)
 
     # --- Get last Bluesky post time ---
-    last_bsky = get_last_bsky(client, config["bsky"]["handle"]) if not offline else arrow.get(0)
+    last_bsky = get_last_bsky(client, bsky_handle)
 
     # --- Parse feed ---
-    feed = fastfeedparser.parse(config["feed"])
+    feed = fastfeedparser.parse(feed_url)
 
     for item in feed.entries:
         rss_time = arrow.get(item.published)
@@ -119,14 +121,13 @@ def main():
         rich_text = make_rich(post_text)
         logging.info("Rich text length: %d" % (len(rich_text.build_text())))
         logging.info("Filtered Content length: %d" % (len(post_text)))
-        if rss_time > last_bsky: # Only post if newer than last Bluesky post
-        #if True:  # FOR TESTING ONLY! Revert after test.
-
+        #if rss_time > last_bsky: # Only post if newer than last Bluesky post
+        if True:  # FOR TESTING ONLY!
             link_metadata = fetch_link_metadata(item.link)
             images = []
 
             # Try to fetch image from snippet (Open Graph/Twitter Card)
-            if link_metadata.get("image") and not offline:
+            if link_metadata.get("image"):
                 img = get_image_from_url(link_metadata["image"], client)
                 if img:
                     images.append(img)
@@ -154,8 +155,7 @@ def main():
 
             # Post
             try:
-                if not offline:
-                    client.send_post(rich_text, embed=embed)
+                client.send_post(rich_text, embed=embed)
                 logging.info("Sent post %s" % (item.link))
             except Exception as e:
                 logging.exception("Failed to post %s" % (item.link))
