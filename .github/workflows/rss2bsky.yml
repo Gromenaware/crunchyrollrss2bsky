@@ -1,4 +1,5 @@
-name: Post RSS to Bluesky
+name: Post RSS to BSKY
+description: "A GitHub Action to post RSS feed items to Bluesky (BSKY) using a Python script."
 
 on:
   workflow_dispatch:
