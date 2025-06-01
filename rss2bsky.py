@@ -121,8 +121,8 @@ def main():
         rich_text = make_rich(post_text)
         logging.info("Rich text length: %d" % (len(rich_text.build_text())))
         logging.info("Filtered Content length: %d" % (len(post_text)))
-        #if rss_time > last_bsky: # Only post if newer than last Bluesky post
-        if True:  # FOR TESTING ONLY!
+        if rss_time > last_bsky: # Only post if newer than last Bluesky post
+        #if True:  # FOR TESTING ONLY!
             link_metadata = fetch_link_metadata(item.link)
             images = []
 
