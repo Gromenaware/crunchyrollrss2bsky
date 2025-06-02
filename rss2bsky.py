@@ -5,7 +5,6 @@ import logging
 import re
 import httpx
 import time
-
 from atproto import Client, client_utils, models
 from bs4 import BeautifulSoup
 from urllib.parse import urlparse
@@ -52,7 +51,6 @@ def make_rich(content):
         # If the line is a URL, make it a clickable link
         if line.startswith("http"):
             url = line.strip()
-            url_obj = urlparse(url)
             text_builder.link(url, url)
         else:
             tag_split = re.split("(#[a-zA-Z0-9]+)", line)
@@ -65,19 +63,22 @@ def make_rich(content):
                     text_builder.text(t)
     return text_builder
 
-def get_image_from_url(image_url, client):
+def get_image_from_url(image_url, client, alt_text="Preview image"):
     try:
         r = httpx.get(image_url)
         if r.status_code != 200:
             return None
         img_blob = client.upload_blob(r.content)
         img_model = models.AppBskyEmbedImages.Image(
-            alt="Preview image", image=img_blob.blob
+            alt=alt_text, image=img_blob.blob
         )
         return img_model
     except Exception as e:
         logging.warning(f"Could not fetch/upload image from {image_url}: {e}")
         return None
+
+def is_html(text):
+    return bool(re.search(r'<.*?>', text))
 
 def main():
     # --- Parse command-line arguments ---
@@ -87,7 +88,6 @@ def main():
     parser.add_argument("bsky_username", help="Bluesky username")
     parser.add_argument("bsky_app_password", help="Bluesky app password")
     args = parser.parse_args()
-
     feed_url = args.rss_feed
     bsky_handle = args.bsky_handle
     bsky_username = args.bsky_username
@@ -115,7 +115,10 @@ def main():
         rss_time = arrow.get(item.published)
         logging.info("RSS Time: %s", str(rss_time))
         # Use only the plain title as content, and add the link on a new line
-        title_text = BeautifulSoup(item.title, "html.parser").get_text().strip()
+        if is_html(item.title):
+            title_text = BeautifulSoup(item.title, "html.parser").get_text().strip()
+        else:
+            title_text = item.title.strip()
         post_text = f"{title_text}\n{item.link}"
         logging.info("Title+link used as content: %s", post_text)
         rich_text = make_rich(post_text)
@@ -128,7 +131,9 @@ def main():
 
             # Try to fetch image from snippet (Open Graph/Twitter Card)
             if link_metadata.get("image"):
-                img = get_image_from_url(link_metadata["image"], client)
+                # Prefer the RSS title, fall back to the link_metadata's title
+                alt_text = title_text or link_metadata.get("title") or "Preview image"
+                img = get_image_from_url(link_metadata["image"], client, alt_text=alt_text)
                 if img:
                     images.append(img)
 
