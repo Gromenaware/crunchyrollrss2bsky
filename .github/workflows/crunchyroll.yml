@@ -1,10 +1,10 @@
-name: eP Santa Coloma Post RSS to BSKY
+name: CrunchyRoll Post RSS to BSKY
 description: "A GitHub Action to post RSS feed items to Bluesky (BSKY) using a Python script."
 
 on:
   workflow_dispatch:
   schedule:
-    - cron: '*/52 * * * *'  # every 52 minutes
+    - cron: '*/8 * * * *'  # every 36 minutes
 
 jobs:
   post:
@@ -20,4 +20,4 @@ jobs:
           pip install atproto fastfeedparser beautifulsoup4 httpx arrow
       - name: Run script
         run: |
-          python3 rss2bsky.py https://www.elperiodico.cat/ca/rss/santa-coloma/rss.xml ${{ secrets.BSKY_HANDLE }} ${{ secrets.BSKY_USERNAME }} ${{ secrets.BSKY_APP_PASSWORD }}
+          python3 rss2bsky.py https://feeds.feedburner.com/crunchyroll/rss/anime?lang=esES ${{ secrets.BSKY_USERNAME }} ${{ secrets.BSKY_APP_PASSWORD }}
