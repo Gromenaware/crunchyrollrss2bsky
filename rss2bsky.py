@@ -157,8 +157,8 @@ def main():
         rich_text = make_rich(post_text)
         logging.info("Rich text length: %d" % (len(rich_text.build_text())))
         logging.info("Filtered Content length: %d" % (len(post_text)))
-        #if rss_time > last_bsky:  # Only post if newer than last Bluesky post
-        if True:  # Always post, remove this line to enable posting condition
+        if rss_time > last_bsky:  # Only post if newer than last Bluesky post
+        #if True:  # Always post, remove this line to enable posting condition
             images = []
 
             # Extract image from <description> and replace "_thumb" with "_full"
