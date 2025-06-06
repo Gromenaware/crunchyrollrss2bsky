@@ -20,4 +20,4 @@ jobs:
           pip install atproto fastfeedparser beautifulsoup4 httpx arrow
       - name: Run script
         run: |
-          python3 rss2bsky.py https://feeds.feedburner.com/crunchyroll/rss/anime?lang=esES ${{ secrets.BSKY_USERNAME }} ${{ secrets.BSKY_APP_PASSWORD }}
+          python3 rss2bsky.py https://feeds.feedburner.com/crunchyroll/rss/anime?lang=esES ${{ secrets.BSKY_HANDLE }} ${{ secrets.BSKY_USERNAME }} ${{ secrets.BSKY_APP_PASSWORD }}

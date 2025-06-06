@@ -5,7 +5,7 @@ import logging
 import re
 import httpx
 import time
-from atproto import Client, client_utils, models
+from atproto import Client, client_utils, models  # Ensure you have the correct library installed
 from bs4 import BeautifulSoup
 from urllib.parse import urlparse
 
@@ -26,23 +26,57 @@ def fetch_link_metadata(url):
         title = (soup.find("meta", property="og:title") or soup.find("title"))
         desc = (soup.find("meta", property="og:description") or soup.find("meta", attrs={"name": "description"}))
         image = (soup.find("meta", property="og:image") or soup.find("meta", attrs={"name": "twitter:image"}))
+        
+        # If an image URL is found, append "_full.jpg" to the base URL
+        image_url = None
+        if image and image.has_attr("content"):
+            base_image_url = image["content"]
+            # Append "_full.jpg" only if not already present
+            if not base_image_url.endswith("_full.jpg"):
+                parsed_url = urlparse(base_image_url)
+                base_path, ext = parsed_url.path.rsplit('.', 1)
+                image_url = f"{parsed_url.scheme}://{parsed_url.netloc}{base_path}_full.jpg"
+            else:
+                image_url = base_image_url
+
         return {
             "title": title["content"] if title and title.has_attr("content") else (title.text if title else ""),
             "description": desc["content"] if desc and desc.has_attr("content") else "",
-            "image": image["content"] if image and image.has_attr("content") else None,
+            "image": image_url,
         }
     except Exception as e:
         logging.warning(f"Could not fetch link metadata for {url}: {e}")
         return {}
 
 def get_last_bsky(client, handle):
-    timeline = client.get_author_feed(handle)
-    for titem in timeline.feed:
-        # Only care about top-level, non-reply posts
-        if titem.reason is None and getattr(titem.post.record, "reply", None) is None:
-            logging.info("Record created %s", str(titem.post.record.created_at))
-            return arrow.get(titem.post.record.created_at)
-    return arrow.get(0)
+    try:
+        timeline = client.get_author_feed(handle)
+        for titem in timeline.feed:
+            # Only care about top-level, non-reply posts
+            if titem.reason is None and getattr(titem.post.record, "reply", None) is None:
+                logging.info("Record created %s", str(titem.post.record.created_at))
+                return arrow.get(titem.post.record.created_at)
+        return arrow.get(0)
+    except Exception as e:
+        logging.warning(f"Failed to get last Bluesky post: {e}")
+        return arrow.get(0)
+
+def get_image_from_url(image_url, client, alt_text="Preview image"):
+    try:
+        r = httpx.get(image_url)
+        if r.status_code != 200:
+            return None
+        img_blob = client.upload_blob(r.content)
+        img_model = models.AppBskyEmbedImages.Image(
+            alt=alt_text, image=img_blob.blob
+        )
+        return img_model
+    except Exception as e:
+        logging.warning(f"Could not fetch/upload image from {image_url}: {e}")
+        return None
+
+def is_html(text):
+    return bool(re.search(r'<.*?>', text))
 
 def make_rich(content):
     text_builder = client_utils.TextBuilder()
@@ -62,23 +96,6 @@ def make_rich(content):
                 else:
                     text_builder.text(t)
     return text_builder
-
-def get_image_from_url(image_url, client, alt_text="Preview image"):
-    try:
-        r = httpx.get(image_url)
-        if r.status_code != 200:
-            return None
-        img_blob = client.upload_blob(r.content)
-        img_model = models.AppBskyEmbedImages.Image(
-            alt=alt_text, image=img_blob.blob
-        )
-        return img_model
-    except Exception as e:
-        logging.warning(f"Could not fetch/upload image from {image_url}: {e}")
-        return None
-
-def is_html(text):
-    return bool(re.search(r'<.*?>', text))
 
 def main():
     # --- Parse command-line arguments ---
@@ -124,8 +141,8 @@ def main():
         rich_text = make_rich(post_text)
         logging.info("Rich text length: %d" % (len(rich_text.build_text())))
         logging.info("Filtered Content length: %d" % (len(post_text)))
-        if rss_time > last_bsky: # Only post if newer than last Bluesky post
-        #if True:  # FOR TESTING ONLY!
+        #if rss_time > last_bsky: # Only post if newer than last Bluesky post
+        if True:  # FOR TESTING ONLY!
             link_metadata = fetch_link_metadata(item.link)
             images = []
 
