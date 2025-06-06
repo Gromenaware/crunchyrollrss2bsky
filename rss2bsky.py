@@ -65,6 +65,7 @@ def get_image_from_url(image_url, client, alt_text="Preview image"):
     try:
         r = httpx.get(image_url)
         if r.status_code != 200:
+            logging.warning(f"Failed to fetch image from {image_url}, status code: {r.status_code}")
             return None
         img_blob = client.upload_blob(r.content)
         img_model = models.AppBskyEmbedImages.Image(
@@ -96,6 +97,21 @@ def make_rich(content):
                 else:
                     text_builder.text(t)
     return text_builder
+
+def extract_image_from_description(description):
+    try:
+        # Parse the description HTML
+        soup = BeautifulSoup(description, "html.parser")
+        img_tag = soup.find("img")
+        if img_tag and img_tag.has_attr("src"):
+            # Get the image URL and replace "_thumb" with "_full"
+            img_url = img_tag["src"]
+            img_url_full = img_url.replace("_thumb", "_full")
+            return img_url_full
+        return None
+    except Exception as e:
+        logging.warning(f"Failed to extract image from description: {e}")
+        return None
 
 def main():
     # --- Parse command-line arguments ---
@@ -141,29 +157,29 @@ def main():
         rich_text = make_rich(post_text)
         logging.info("Rich text length: %d" % (len(rich_text.build_text())))
         logging.info("Filtered Content length: %d" % (len(post_text)))
-        #if rss_time > last_bsky: # Only post if newer than last Bluesky post
-        if True:  # FOR TESTING ONLY!
-            link_metadata = fetch_link_metadata(item.link)
+        #if rss_time > last_bsky:  # Only post if newer than last Bluesky post
+        if True:  # Always post, remove this line to enable posting condition
             images = []
 
-            # Try to fetch image from snippet (Open Graph/Twitter Card)
-            if link_metadata.get("image"):
-                # Prefer the RSS title, fall back to the link_metadata's title
-                alt_text = title_text or link_metadata.get("title") or "Preview image"
-                img = get_image_from_url(link_metadata["image"], client, alt_text=alt_text)
-                if img:
-                    images.append(img)
+            # Extract image from <description> and replace "_thumb" with "_full"
+            if item.description:
+                img_url_full = extract_image_from_description(item.description)
+                if img_url_full:
+                    alt_text = title_text or "Preview image"
+                    img = get_image_from_url(img_url_full, client, alt_text=alt_text)
+                    if img:
+                        images.append(img)
 
             logging.info("Images length: %d" % (len(images)))
 
             # --- Add external embed for link preview ---
             external_embed = None
-            if link_metadata.get("title") or link_metadata.get("description"):
+            if item.title or item.description:
                 external_embed = models.AppBskyEmbedExternal.Main(
                     external=models.AppBskyEmbedExternal.External(
                         uri=item.link,
-                        title=link_metadata.get("title") or "Link",
-                        description=link_metadata.get("description") or "",
+                        title=item.title or "Link",
+                        description=item.description or "",
                         thumb=None,
                     )
                 )
